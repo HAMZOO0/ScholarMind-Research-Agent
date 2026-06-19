@@ -136,7 +136,7 @@ Personal research assistant/
 3. **Install dependencies**
 
    ```bash
-   pip install streamlit python-dotenv langchain langchain-groq mem0ai qdrant-client sentence-transformers
+   pip install streamlit python-dotenv langchain langchain-groq mem0ai qdrant-client sentence-transformers duckduckgo-search langgraph
    ```
 
 4. **Configure environment variables**

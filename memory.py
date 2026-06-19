@@ -3,10 +3,17 @@ warnings.filterwarnings("ignore")
 
 import os
 import atexit
+import io
+import re
+import requests
+import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.tools import tool
+from langgraph.prebuilt import create_react_agent
 from mem0 import Memory
+from ddgs import DDGS
 
 load_dotenv()
 
@@ -46,6 +53,7 @@ MEMORY CONTEXT FROM PAST SESSIONS:
 BEHAVIOR:
 - Always break complex questions into smaller sub-questions before answering
 - Search for the most recent and relevant information
+- If you find a relevant arXiv paper ID or URL in web search results, or if the user asks you to read a paper, you MUST use the 'fetch_arxiv_paper' tool to read its full content. Do not summarize it based on web search snippets alone.
 - Cross-reference multiple sources before giving a conclusion
 - Use the memory context above to build on what the user has already researched
 - Never ask the user to repeat context that already exists in memory
@@ -67,7 +75,7 @@ If you do not know something, say so clearly. Never hallucinate facts or sources
 
 # --- Init model ---
 try:
-    model = init_chat_model("groq:qwen/qwen3-32b")
+    model = init_chat_model("groq:llama-3.3-70b-versatile")
     print("SUCCESS: Model initialized")
 except Exception as e:
     model = None
@@ -107,6 +115,78 @@ def _close_memory() -> None:
 atexit.register(_close_memory)
 
 
+@tool
+def web_search(query: str) -> str:
+
+    """Search the web for the latest information on a topic."""
+    print("\n\n\n\n\query:: ",query)
+    with DDGS() as ddgs:
+        results = list(ddgs.text(query, max_results=2))
+
+    output = []
+    for r in results:
+        output.append(
+            f"""
+Title: {r['title']}
+
+URL: {r['href']}
+
+Description:
+{r['body']}
+"""
+        )
+
+    return "\n" + ("-" * 50 + "\n").join(output)
+
+
+@tool
+def fetch_arxiv_paper(arxiv_id_or_url: str) -> str:
+    """Download and extract the text content of an arXiv research paper.
+    
+    This tool is useful when you have an arXiv ID (like '2310.01526') or an arXiv URL (like 'https://arxiv.org/abs/2310.01526')
+    and want to read the paper's contents, abstract, introduction, or main findings.
+    """
+    print("\n\n\n\n\narxiv_id_or_url:: ",arxiv_id_or_url)
+    try:
+        # Extract the arXiv ID from URL or input
+        input_str = arxiv_id_or_url.strip()
+        match = re.search(r"arxiv\.org/(?:abs|pdf)/([a-zA-Z0-9./\-]+)", input_str, re.IGNORECASE)
+        if match:
+            arxiv_id = match.group(1)
+            if arxiv_id.endswith(".pdf"):
+                arxiv_id = arxiv_id[:-4]
+        else:
+            arxiv_id = input_str
+
+        url = f"https://arxiv.org/pdf/{arxiv_id}"
+        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
+        response.raise_for_status()
+        
+        doc = fitz.open(stream=io.BytesIO(response.content), filetype="pdf")
+        
+        text = ""
+        for page in doc:
+            text += page.get_text()
+        
+        if not text.strip():
+            return f"Error: No text could be extracted from the arXiv paper with ID {arxiv_id}."
+            
+        # Truncate to a reasonable limit to avoid context window overflow/TPM limits (e.g., 12000 characters)
+        max_chars = 12000
+        if len(text) > max_chars:
+            truncated_text = text[:max_chars]
+            return (
+                f"--- arXiv Paper ID: {arxiv_id} (Truncated to first {max_chars} characters) ---\n\n"
+                f"{truncated_text}\n\n"
+                f"--- [End of Truncated Content - Total Paper Length: {len(text)} characters] ---"
+            )
+            
+        return f"--- arXiv Paper ID: {arxiv_id} ---\n\n{text}"
+        
+    except Exception as e:
+        return f"Error downloading or parsing the arXiv paper: {str(e)}"
+
+
 def chat(user_id: str, user_message: str) -> str:
     if MEMORY is None:
         return "Setup error: could not initialize Mem0."
@@ -121,21 +201,24 @@ def chat(user_id: str, user_message: str) -> str:
         )
         memory_context = _format_memories(search_results)
 
-        messages = [
-            SystemMessage(content=SYSTEM_PROMPT_TEMPLATE.format(memory=memory_context)),
-            HumanMessage(content=user_message),
-        ]
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(memory=memory_context)
 
-        response = model.invoke(messages)
-        reply = response.content
+        # Tools
+        tools = [web_search, fetch_arxiv_paper]
+
+        # Create agent
+        agent_executor = create_react_agent(model, tools=tools, prompt=system_prompt)
+
+        # Invoke
+        response = agent_executor.invoke({"messages": [HumanMessage(content=user_message)]})
+        reply = response["messages"][-1].content
 
         MEMORY.add(
             [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": reply},
             ],
-               user_id=user_id,
-
+            user_id=user_id,
         )
 
         return reply
