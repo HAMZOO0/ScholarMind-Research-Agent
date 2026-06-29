@@ -33,7 +33,6 @@
 | 10 | [Usage](#usage) |
 | 11 | [Demo Knowledge Base](#demo-knowledge-base) |
 | 12 | [Test Scenarios](#test-scenarios) |
-| 13 | [Roadmap](#roadmap) |
 
 ---
 
@@ -816,27 +815,3 @@ python -m tests.test_agent
 | Tool toggle | Disable arXiv | Agent skips arXiv, uses web only |
 
 ---
-
-## Roadmap
-
-| Status | Feature |
-|---|---|
-| Done | 7-tool ecosystem (web, arXiv, PubMed, YouTube x2, GitHub) |
-| Done | 5-model cascade with mid-loop switching |
-| Done | Live model indicator (sidebar + per-reply badge) |
-| Done | Smart database routing (PubMed vs arXiv) |
-| Done | SQLite persistent memory — per-user fact storage with ~150-token extraction |
-| Done | FastMCP server for external integrations |
-| Done | Slash command routing with forced tool binding |
-| Planned | Semantic Scholar tool for broader academic coverage |
-| Planned | PDF upload — research your own documents |
-| Planned | Export session as formatted research report |
-| Planned | Streaming responses (token-by-token rendering) |
-| Planned | Citation graph — visualize paper relationships |
-| Planned | Scheduled research digests |
-
----
-
-## License
-
-This project is provided for educational and personal research use.
