@@ -16,29 +16,6 @@ MODEL_CASCADE = [
     "groq:openai/gpt-oss-20b",       # fastest, lightest — last resort
 ]
 
-MEM0_CONFIG = {
-    "llm": {
-        "provider": "groq",
-        "config": {
-            "model": "openai/gpt-oss-20b",
-        },
-    },
-    "vector_store": {
-        "provider": "qdrant",
-        "config": {
-            "collection_name": "mem0_research_assistant",
-            "embedding_model_dims": 384,
-            "path": "./qdrant_store",
-        },
-    },
-    "embedder": {
-        "provider": "huggingface",
-        "config": {
-            "model": "sentence-transformers/all-MiniLM-L6-v2",
-            "embedding_dims": 384,
-        },
-    },
-}
 
 SYSTEM_PROMPT_TEMPLATE = """You are an expert research assistant with access to real-time web search, arXiv paper discovery, and memory of past research sessions.
 

@@ -291,7 +291,6 @@ st.markdown("""
 
 with st.sidebar:
     USER_ID = st.text_input("Your User ID", value="user_01", placeholder="Enter your user ID...")
-
 # --- Init session state ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
